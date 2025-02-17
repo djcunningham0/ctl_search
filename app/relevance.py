@@ -2,7 +2,6 @@ from typing import Literal
 
 import polars as pl
 import streamlit as st
-from elasticsearch import Elasticsearch
 from urllib.parse import unquote
 
 from app import metrics
@@ -33,6 +32,7 @@ MY_VISIT_IDS = [
 
 def lowercase_and_strip(col: str):
     return pl.col(col).str.to_lowercase().str.strip_chars()
+
 
 @st.cache_data
 def load_query_df() -> pl.DataFrame:
