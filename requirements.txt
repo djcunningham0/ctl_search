@@ -1,0 +1,6 @@
+elasticsearch
+polars
+psycopg2
+sentence-transformers
+sqlalchemy
+streamlit
