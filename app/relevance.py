@@ -57,7 +57,7 @@ def get_top_n_queries(n: int) -> list[str]:
         load_query_df()
         .group_by("query")
         .agg(pl.len().alias("count"))
-        .sort("count", descending=True)
+        .sort(["count", "query"], descending=[True, False])
         .head(n)
         .select("query")
         .to_series()
