@@ -1,4 +1,5 @@
 elasticsearch
+plotly
 polars
 psycopg2
 sentence-transformers

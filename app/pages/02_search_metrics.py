@@ -1,82 +1,175 @@
 from itertools import cycle
+from typing import Literal
 
 import streamlit as st
+import plotly.express as px
+import polars as pl
 
-from app.elastic import get_es_client, get_default_elasticsearch_weights
+from app.elastic import get_default_elasticsearch_weights
 from app.relevance import run_metrics, get_top_n_queries
 from app.semantic import SemanticSearch, DEFAULT_EMBEDDING_MODEL, SUGGESTED_MODELS
 from app.sql import get_default_pg_search_weights
 
-st.title("Search Metrics")
+st.title("Search Metrics Comparison")
 
-if "i" not in st.session_state:
-    st.session_state["i"] = 0
 
-# take in comma separated list of query terms
+# collect query terms
 default_terms = ", ".join(get_top_n_queries(20))
-query_terms = st.text_input("query terms", value=default_terms)
-query_terms = query_terms.split(",")
-query_terms = [x.strip() for x in query_terms]
-query_terms = [x for x in query_terms if x != ""]
+query_terms = st.text_input("query terms", value=default_terms).split(",")
+query_terms = [x.strip() for x in query_terms if x.strip()]
+
+level = st.selectbox("level", ["name", "number"])
 
 if not query_terms:
     st.stop()
 
-search_type = st.selectbox("search type", ["pg_search", "semantic search", "elasticsearch"])
+if "methodologies" not in st.session_state:
+    st.session_state["methodologies"] = []
 
-semantic_search = None
-pg_search_weights = None
-es_weights = None
 
-if search_type == "pg_search":
-    with st.expander("pg_search weights"):
-        if st.button("reset to defaults"):
-            st.session_state.i += 1
-        pg_search_weights = {}
-        cols = cycle(st.columns(4))
-        options = ["A", "B", "C", "D", None]
-        for k, v in get_default_pg_search_weights().items():
-            col = next(cols)
-            w = col.selectbox(k, options, index=options.index(v), key=f"{k}_{st.session_state.i}")
-            if w is not None:
-                pg_search_weights[k] = w
+def add_methodology():
+    st.session_state["methodologies"].append({"type": "pg_search", "params": {}})
 
-elif search_type == "semantic search":
-    semantic_search_model = st.selectbox(
-        "semantic search model",
-        options=SUGGESTED_MODELS,
-        index=SUGGESTED_MODELS.index(DEFAULT_EMBEDDING_MODEL),
+
+def remove_methodology(index: int):
+    st.session_state["methodologies"].pop(index)
+
+
+@st.cache_data(hash_funcs={SemanticSearch: lambda x: x.model_str})
+def _run_metrics(
+        query_list: list[str],
+        k_list: list[int],
+        level: Literal["name", "number"],
+        search_type: Literal["pg_search", "semantic search", "elasticsearch"],
+        pg_search_weights: dict[str, str],
+        semantic_search: SemanticSearch,
+        es_weights: dict[str, float],
+):
+    return run_metrics(
+        query_list=query_list,
+        k_list=k_list,
+        level=level,
+        search_type=search_type,
+        pg_search_weights=pg_search_weights,
+        semantic_search=semantic_search,
+        es_weights=es_weights,
     )
-    semantic_search = SemanticSearch(semantic_search_model)
 
-elif search_type == "elasticsearch":
-    with st.expander("elasticsearch weights"):
-        if st.button("reset to defaults"):
-            st.session_state.i += 1
-        es_weights = {}
-        cols = cycle(st.columns(4))
-        for k, v in get_default_elasticsearch_weights().items():
-            col = next(cols)
-            w = col.number_input(k, value=float(v), min_value=0.0, step=1.0, key=f"{k}_elastic_{st.session_state.i}")
-            if w is not None:
-                es_weights[k] = w
 
-else:
-    raise NotImplementedError(f"{__name__}: {search_type=}")
+def configure_methodology(index: int, methodology: dict):
+    with st.container(border=True):
+        st.write(f"### Methodology {index + 1}")
+        c1, c2 = st.columns(2, vertical_alignment="bottom")
+        search_type = c1.selectbox(
+            "search type",
+            options=["pg_search", "semantic search", "elasticsearch"],
+            key=f"search_type_{index}",
+            index=["pg_search", "semantic search", "elasticsearch"].index(methodology["type"])
+        )
+        methodology["type"] = search_type
 
-level = st.selectbox("level", ["name", "number"])
+        params = {"pg_search_weights": None, "semantic_search": None, "es_weights": None}
 
-metrics_df = run_metrics(
-    query_list=query_terms,
-    k_list=[1, 5, 10, 20, 50, 100],
-    level=level,
-    search_type=search_type,
-    pg_search_weights=pg_search_weights,
-    semantic_search=semantic_search,
-    es_weights=es_weights,
-)
-metrics_df = metrics_df.sort("query")
-st.write("query-level metrics")
-st.write(metrics_df)
-st.write("average metrics")
-st.dataframe(metrics_df.mean())
+        if search_type == "pg_search":
+            with st.expander("pg_search weights"):
+                # TODO: figure out reset button (not as easy as single methodology case
+                #  -- don't want to reset *all* methodologies)
+                # if st.button("Reset to defaults", key=f"reset_pg_{index}"):
+                #     methodology["params"] = {}
+                cols = cycle(st.columns(4))
+                options = ["A", "B", "C", "D", None]
+                params["pg_search_weights"] = {}
+                for k, v in get_default_pg_search_weights().items():
+                    col = next(cols)
+                    w = col.selectbox(k, options, index=options.index(v), key=f"{k}_{index}")
+                    if w is not None:
+                        params["pg_search_weights"][k] = w
+
+        elif search_type == "semantic search":
+            semantic_search_model = st.selectbox(
+                "semantic search model",
+                options=SUGGESTED_MODELS,
+                index=SUGGESTED_MODELS.index(DEFAULT_EMBEDDING_MODEL),
+                key=f"semantic_model_{index}"
+            )
+            params["semantic_search"] = SemanticSearch(semantic_search_model)
+
+        elif search_type == "elasticsearch":
+            with st.expander("elasticsearch weights"):
+                # if st.button("Reset to defaults", key=f"reset_es_{index}"):
+                #     methodology["params"] = {}
+                cols = cycle(st.columns(4))
+                params["es_weights"] = {}
+                for k, v in get_default_elasticsearch_weights().items():
+                    col = next(cols)
+                    w = col.number_input(k, value=float(v), min_value=0.0, step=1.0, key=f"{k}_elastic_{index}")
+                    if w is not None:
+                        params["es_weights"][k] = w
+
+        methodology["params"] = params
+        if c2.button("Remove", key=f"remove_{index}"):
+            remove_methodology(index)
+            st.rerun()
+
+
+# Configure each methodology
+for i, methodology in enumerate(st.session_state["methodologies"]):
+    configure_methodology(i, methodology)
+
+st.button("Add Search Methodology", on_click=add_methodology)
+
+
+# Run searches and compare results
+results = []
+for i, methodology in enumerate(st.session_state["methodologies"]):
+    search_type = methodology["type"]
+    params = methodology["params"]
+
+    with st.spinner(f"executing methodology {i + 1}"):
+        metrics_df = (
+            _run_metrics(
+                query_list=query_terms,
+                k_list=[1, 5, 10, 20, 50, 100],
+                level=level,
+                search_type=search_type,
+                pg_search_weights=params["pg_search_weights"],
+                semantic_search=params["semantic_search"],
+                es_weights=params["es_weights"],
+            )
+            .with_columns(
+                pl.lit(i + 1).alias("n"),
+                pl.lit(search_type).alias("base_methodology"),
+                pl.lit(f"{search_type} ({i + 1})").alias("name"),
+            )
+            .with_columns(
+                pl.col("query").cast(pl.Enum(query_terms))
+            )
+        )
+        results.append(metrics_df)
+
+st.divider()
+
+if results:
+    final_df = pl.concat(results).sort("query", "n")
+
+    st.write("### Query-level metrics")
+    k = st.selectbox("k", [1, 5, 10, 20, 50, 100], index=2)
+    fig = px.bar(final_df, x="query", y=f"ndcg_at_{k}", color="name", barmode="group")
+    st.plotly_chart(fig)
+
+    st.write("### Overall metrics")
+    agg_df = (
+        final_df
+        .drop("query")
+        .group_by(["n", "name", "base_methodology"])
+        .mean()
+        .sort("n")
+        .unpivot(
+            index=["n", "name", "base_methodology"],
+            variable_name="k",
+            value_name="value",
+        )
+        .with_columns(pl.col("k").str.split("ndcg_at_").list.get(1).alias("k"))
+    )
+    fig = px.bar(agg_df, x="k", y="value", color="name", barmode="group")
+    st.plotly_chart(fig)
