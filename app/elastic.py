@@ -59,11 +59,14 @@ def build_items_index(client: Elasticsearch):
 
 
 def search_with_elastic(
-        client: Elasticsearch,
         search_term: str,
+        client: Elasticsearch = None,
         weights: dict[str, int] = None,
         **kwargs,
 ) -> pl.DataFrame:
+    if client is None:
+        client = get_es_client()
+
     if weights is None:
         weights = get_default_elasticsearch_weights()
 

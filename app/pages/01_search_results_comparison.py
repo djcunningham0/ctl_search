@@ -75,6 +75,5 @@ if query != "":
     # elasticsearch
     with c3:
         st.write("### elasticsearch")
-        es_client = get_es_client()
-        results = search_with_elastic(es_client, query, size=n)
+        results = search_with_elastic(query, size=n)
         display_df(results)

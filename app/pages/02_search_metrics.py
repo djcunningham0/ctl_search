@@ -26,7 +26,6 @@ search_type = st.selectbox("search type", ["pg_search", "semantic search", "elas
 
 semantic_search = None
 pg_search_weights = None
-es_client = None
 es_weights = None
 
 if search_type == "pg_search":
@@ -51,7 +50,6 @@ elif search_type == "semantic search":
     semantic_search = SemanticSearch(semantic_search_model)
 
 elif search_type == "elasticsearch":
-    es_client = get_es_client()
     with st.expander("elasticsearch weights"):
         if st.button("reset to defaults"):
             st.session_state.i += 1
@@ -75,7 +73,6 @@ metrics_df = run_metrics(
     search_type=search_type,
     pg_search_weights=pg_search_weights,
     semantic_search=semantic_search,
-    es_client=es_client,
     es_weights=es_weights,
 )
 metrics_df = metrics_df.sort("query")

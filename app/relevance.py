@@ -185,11 +185,10 @@ def collect_relevance_df(
 def get_retrieved_df(
         # TODO refactor so it just collects a dataframe, doesn't actually execute the query
         query_list: list[str],
-        search_type: Literal["pg_search", "semantic", "elasticsearch"] = "pg_search",
+        search_type: Literal["pg_search", "semantic search", "elasticsearch"] = "pg_search",
         level: Literal["name", "number"] = "name",
         pg_search_weights: dict[str, str] = None,
         semantic_search: SemanticSearch = None,
-        es_client: Elasticsearch = None,
         es_weights: dict[str, float] = None,
 ) -> pl.DataFrame:
     """
@@ -210,7 +209,7 @@ def get_retrieved_df(
     pg_search_weights
         Weights for the pg_search queries
     """
-    if search_type == "semantic" and semantic_search is None:
+    if search_type == "semantic search" and semantic_search is None:
         raise ValueError("Must provide `semantic_search` if `search_type` is 'semantic'")
 
     collect_col = "item_name" if level == "name" else "item_number"
@@ -222,7 +221,7 @@ def get_retrieved_df(
         elif search_type == "semantic search":
             _df = semantic_search.search(query)
         elif search_type == "elasticsearch":
-            _df = search_with_elastic(es_client, query, weights=es_weights)
+            _df = search_with_elastic(query, weights=es_weights)
         else:
             raise NotImplementedError(f"{search_type=}")
         _df = _df.with_columns(lowercase_and_strip("item_name").alias("item_name"))
@@ -282,7 +281,7 @@ def run_metrics(
         query_list: list[str],
         k_list: list[int],
         level: Literal["name", "number"] = "name",
-        search_type: Literal["pg_search", "semantic"] = "pg_search",
+        search_type: Literal["pg_search", "semantic search", "elasticsearch"] = "pg_search",
         pg_search_weights: dict[str, str] = None,
         view_weight: float = DEFAULT_VIEW_WEIGHT,
         hold_weight: float = DEFAULT_HOLD_WEIGHT,
@@ -291,7 +290,6 @@ def run_metrics(
         dcg_type: Literal["linear", "exponential"] = "linear",
         drop_lists: bool = True,
         semantic_search: SemanticSearch = None,
-        es_client: Elasticsearch = None,
         es_weights: dict[str, float] = None,
 ) -> pl.DataFrame:
     query_df = load_query_df()
@@ -309,7 +307,6 @@ def run_metrics(
         level=level,
         pg_search_weights=pg_search_weights,
         semantic_search=semantic_search,
-        es_client=es_client,
         es_weights=es_weights,
     )
     combined_df = combine_retrieved_and_relevant_dfs(
