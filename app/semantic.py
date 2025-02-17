@@ -10,15 +10,14 @@ DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 SUGGESTED_MODELS = [
     "all-MiniLM-L6-v2",
+    "multi-qa-mpnet-base-cos-v1",
     "multi-qa-mpnet-base-dot-v1",
-    "all-mpnet-base-v2",
+    "all-mpnet-base-v2",  # surprisingly seems worse than all-MiniLM-L6-v2
     "multi-qa-distilbert-cos-v1",
     "multi-qa-MiniLM-L6-cos-v1",
-    "all-distilroberta-v1",
-    "all-MiniLM-L12-v2",
-    "paraphrase-albert-small-v2",
-    "paraphrase-MiniLM-L3-v2",
-    "multi-qa-mpnet-base-cos-v1",
+    # I considered the ones below this line but they performed worse than the others
+    # "all-distilroberta-v1",
+    # "all-MiniLM-L12-v2",
 ]
 
 
