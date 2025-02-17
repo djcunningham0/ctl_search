@@ -12,10 +12,21 @@ from app.sql import get_default_pg_search_weights
 
 st.title("Search Metrics Comparison")
 
+if "query_terms" not in st.session_state:
+    st.session_state["query_terms"] = ", ".join(get_top_n_queries(20))
+
+
+def update_query_terms(n: int):
+    st.session_state["query_terms"] = ", ".join(get_top_n_queries(n))
+
+with st.expander("preset query lists"):
+    cols = cycle(st.columns(4))
+    for x in [5, 10, 20, 40, 60, 80, 100, 200]:
+        next(cols).button(f"top {x} queries", on_click=update_query_terms, args=(x, ))
 
 # collect query terms
 default_terms = ", ".join(get_top_n_queries(20))
-query_terms = st.text_input("query terms", value=default_terms).split(",")
+query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(",")
 query_terms = [x.strip() for x in query_terms if x.strip()]
 
 level = st.selectbox("level", ["name", "number"])
@@ -155,6 +166,7 @@ if results:
     st.write("### Query-level metrics")
     k = st.selectbox("k", [1, 5, 10, 20, 50, 100], index=2)
     fig = px.bar(final_df, x="query", y=f"ndcg_at_{k}", color="name", barmode="group")
+    fig.update_yaxes(range=[0, 1])
     st.plotly_chart(fig)
 
     st.write("### Overall metrics")
@@ -172,4 +184,5 @@ if results:
         .with_columns(pl.col("k").str.split("ndcg_at_").list.get(1).alias("k"))
     )
     fig = px.bar(agg_df, x="k", y="value", color="name", barmode="group")
+    fig.update_yaxes(range=[0, 1])
     st.plotly_chart(fig)

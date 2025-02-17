@@ -52,6 +52,7 @@ def load_query_df() -> pl.DataFrame:
     return query_df
 
 
+@st.cache_data
 def get_top_n_queries(n: int) -> list[str]:
     return (
         load_query_df()
