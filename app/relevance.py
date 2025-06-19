@@ -10,7 +10,7 @@ from app.semantic import SemanticSearch
 from app.sql import execute_query, pg_search
 
 
-DEFAULT_VIEW_WEIGHT = 1
+DEFAULT_VIEW_WEIGHT = 1.0
 DEFAULT_HOLD_WEIGHT = 1.5
 DEFAULT_ALPHA = 0.1
 DEFAULT_MAX_I = 100
@@ -36,7 +36,7 @@ def lowercase_and_strip(col: str):
 
 @st.cache_data
 def load_query_df() -> pl.DataFrame:
-    query_df = pl.read_csv("./data/relevant_search_results_20241115.csv")
+    query_df = pl.read_csv("./data/relevant_search_results.csv")
 
     # clean up some queries
     query_df = (
