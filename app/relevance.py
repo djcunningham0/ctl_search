@@ -11,8 +11,8 @@ from app.sql import execute_query, pg_search
 
 
 DEFAULT_VIEW_WEIGHT = 1.0
-DEFAULT_HOLD_WEIGHT = 1.5
-DEFAULT_ALPHA = 0.1
+DEFAULT_HOLD_WEIGHT = 2.0
+DEFAULT_ALPHA = 0.4
 DEFAULT_MAX_I = 100
 
 # remove my visits because I was likely just testing the search behavior
@@ -43,10 +43,7 @@ def load_query_df() -> pl.DataFrame:
         query_df
         .filter(~pl.col("visit_id").is_in(MY_VISIT_IDS))
         # remove URL encoding (e.g., "%20" -> " ")
-        .with_columns(pl.col("query").map_elements(
-            lambda x: unquote(x),
-            return_dtype=pl.String)
-        )
+        .with_columns(pl.col("query").map_elements(lambda x: unquote(x), return_dtype=pl.String))
         .with_columns(lowercase_and_strip("query").alias("query"))  # remove leading/trailing whitespace
     )
     return query_df
@@ -111,12 +108,12 @@ def calculate_relevance_df(
         .with_columns((1 / (pl.col("capped_index") ** alpha)).alias("bias_adjustment"))
         .with_columns(
             pl.when(pl.col("view_time").is_not_null())
-            .then(pl.col("capped_index") * view_weight / pl.col("bias_adjustment"))
+            .then(view_weight / pl.col("bias_adjustment"))
             .alias("view_score")
         )
         .with_columns(
             pl.when(pl.col("hold_id").is_not_null())
-            .then(pl.col("capped_index") * hold_weight / pl.col("bias_adjustment"))
+            .then(hold_weight / pl.col("bias_adjustment"))
             .alias("hold_score")
         )
         .group_by(
