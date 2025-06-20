@@ -13,19 +13,20 @@ from app.sql import get_default_pg_search_weights
 st.title("Search Metrics Comparison")
 
 if "query_terms" not in st.session_state:
-    st.session_state["query_terms"] = ", ".join(get_top_n_queries(20))
+    st.session_state["query_terms"] = ", ".join(get_top_n_queries(20, exclude_camping=True))
 
 
-def update_query_terms(n: int):
-    st.session_state["query_terms"] = ", ".join(get_top_n_queries(n))
+def update_query_terms(n: int, exclude_camping: bool):
+    st.session_state["query_terms"] = ", ".join(get_top_n_queries(n, exclude_camping=exclude_camping))
+
 
 with st.expander("preset query lists"):
+    exclude_camping = st.checkbox("exclude camping", value=True)
     cols = cycle(st.columns(4))
-    for x in [5, 10, 20, 40, 60, 80, 100, 200]:
-        next(cols).button(f"top {x} queries", on_click=update_query_terms, args=(x, ))
+    for n in [5, 10, 20, 40, 60, 80, 100, 200]:
+        next(cols).button(f"top {n} queries", on_click=update_query_terms, args=(n, exclude_camping))
 
 # collect query terms
-default_terms = ", ".join(get_top_n_queries(20))
 query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(",")
 query_terms = [x.strip() for x in query_terms if x.strip()]
 

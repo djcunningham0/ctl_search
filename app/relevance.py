@@ -29,9 +29,20 @@ MY_VISIT_IDS = [
     127437,
 ]
 
+CAMPING_QUERIES = [
+    "camping",
+    "hiking",
+    "outdoor gear",
+    "camp stove",
+    "tent",
+    "sleeping bag",
+    "sleeping pad",
+    "camp",
+]
+
 
 def lowercase_and_strip(col: str):
-    return pl.col(col).str.to_lowercase().str.strip_chars()
+    return pl.col(col).cast(pl.String).str.to_lowercase().str.strip_chars()
 
 
 @st.cache_data
@@ -50,9 +61,12 @@ def load_query_df() -> pl.DataFrame:
 
 
 @st.cache_data
-def get_top_n_queries(n: int) -> list[str]:
+def get_top_n_queries(n: int, exclude_camping: bool = False) -> list[str]:
+    df = load_query_df()
+    if exclude_camping:
+        df = df.filter(~pl.col("query").is_in(CAMPING_QUERIES))
     return (
-        load_query_df()
+        df
         .group_by("query")
         .agg(pl.len().alias("count"))
         .sort(["count", "query"], descending=[True, False])
