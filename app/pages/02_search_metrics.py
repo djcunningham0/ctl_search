@@ -1,3 +1,4 @@
+from collections import defaultdict
 from itertools import cycle
 from typing import Literal
 
@@ -40,7 +41,14 @@ if "methodologies" not in st.session_state:
 
 
 def add_methodology():
-    st.session_state["methodologies"].append({"type": "pg_search", "params": {}})
+    st.session_state["methodologies"].append({
+        "type": "pg_search",
+        "params": {
+            "pg_search_weights": {},
+            "semantic_search": defaultdict(str),
+            "es_weights": {},
+        }
+    })
 
 
 def remove_methodology(index: int):
@@ -80,43 +88,42 @@ def configure_methodology(index: int, methodology: dict):
         )
         methodology["type"] = search_type
 
-        params = {"pg_search_weights": None, "semantic_search": None, "es_weights": None}
+        params = methodology["params"]
 
         if search_type == "pg_search":
             with st.expander("pg_search weights"):
                 # TODO: figure out reset button (not as easy as single methodology case
                 #  -- don't want to reset *all* methodologies)
-                # if st.button("Reset to defaults", key=f"reset_pg_{index}"):
-                #     methodology["params"] = {}
                 cols = cycle(st.columns(4))
                 options = ["A", "B", "C", "D", None]
-                params["pg_search_weights"] = {}
                 for k, v in get_default_pg_search_weights().items():
                     col = next(cols)
-                    w = col.selectbox(k, options, index=options.index(v), key=f"{k}_{index}")
-                    if w is not None:
-                        params["pg_search_weights"][k] = w
+                    default_val = params["pg_search_weights"].get(k, v)
+                    default_idx = options.index(default_val)
+                    w = col.selectbox(k, options, index=default_idx, key=f"{k}_{index}")
+                    params["pg_search_weights"][k] = w
 
         elif search_type == "semantic search":
+            default_val = params["semantic_search"].get("model_name", DEFAULT_EMBEDDING_MODEL)
+            default_idx = SUGGESTED_MODELS.index(default_val)
             semantic_search_model = st.selectbox(
                 "semantic search model",
                 options=SUGGESTED_MODELS,
-                index=SUGGESTED_MODELS.index(DEFAULT_EMBEDDING_MODEL),
+                index=default_idx,
                 key=f"semantic_model_{index}"
             )
-            params["semantic_search"] = SemanticSearch(semantic_search_model)
+            params["semantic_search"]["model_name"] = semantic_search_model
+            params["semantic_search"]["model"] = SemanticSearch(semantic_search_model)
 
         elif search_type == "elasticsearch":
             with st.expander("elasticsearch weights"):
-                # if st.button("Reset to defaults", key=f"reset_es_{index}"):
-                #     methodology["params"] = {}
                 cols = cycle(st.columns(4))
                 params["es_weights"] = {}
                 for k, v in get_default_elasticsearch_weights().items():
                     col = next(cols)
-                    w = col.number_input(k, value=float(v), min_value=0.0, step=1.0, key=f"{k}_elastic_{index}")
-                    if w is not None:
-                        params["es_weights"][k] = w
+                    default_val = params["es_weights"].get(k, v)
+                    w = col.number_input(k, value=float(default_val), min_value=0.0, step=1.0, key=f"{k}_elastic_{index}")
+                    params["es_weights"][k] = w
 
         methodology["params"] = params
         if c2.button("Remove", key=f"remove_{index}"):
@@ -145,7 +152,7 @@ for i, methodology in enumerate(st.session_state["methodologies"]):
                 level=level,
                 search_type=search_type,
                 pg_search_weights=params["pg_search_weights"],
-                semantic_search=params["semantic_search"],
+                semantic_search=params["semantic_search"]["model"],
                 es_weights=params["es_weights"],
             )
             .with_columns(

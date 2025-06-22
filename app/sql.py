@@ -24,6 +24,8 @@ def pg_search(
     if weights is None:
         weights = get_default_pg_search_weights()
 
+    weights = {k: v for k, v in weights.items() if v is not None}
+
     ts_rank_str = " || ".join([f"setweight(to_tsvector('english', {k}::text), '{v}')" for k, v in weights.items()])
     ts_rank_str = f"ts_rank({ts_rank_str}, to_tsquery('english', :search_term))"
     where_str = " || ".join([f"to_tsvector('english', {k}::text)" for k in weights.keys()])
