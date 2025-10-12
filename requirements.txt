@@ -2,6 +2,6 @@ elasticsearch
 plotly
 polars
 psycopg2
-sentence-transformers
+sentence-transformers>=5.0.0
 sqlalchemy
 streamlit
