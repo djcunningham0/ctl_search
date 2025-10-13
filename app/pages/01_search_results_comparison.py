@@ -37,6 +37,7 @@ with st.sidebar:
     st.write("### pg_search")
     if st.button("reset to defaults", key=f"reset_pg"):
         st.session_state["page_1_i"] += 1
+
     cols = cycle(st.columns(2))
     options = ["A", "B", "C", "D", None]
     pg_search_weights = {}
@@ -45,6 +46,16 @@ with st.sidebar:
         w = col.selectbox(k, options, index=options.index(v), key=f"{k}_{st.session_state['page_1_i']}")
         if w is not None:
             pg_search_weights[k] = w
+
+    tsearch_weight = st.number_input(
+        "tsearch weight",
+        min_value=0.0,
+        max_value=1.0,
+        value=1.0,
+        step=0.1,
+        key=f"tsearch_weight_{st.session_state['page_1_i']}",
+        width=200,
+    )
 
     st.divider()
 
@@ -80,7 +91,7 @@ if query != "":
     # pg_search
     with c1:
         st.write("### pg_search")
-        results = pg_search(query, weights=pg_search_weights).head(n)
+        results = pg_search(query, weights=pg_search_weights, tsearch_weight=tsearch_weight).head(n)
         display_df(results)
 
     # semantic search

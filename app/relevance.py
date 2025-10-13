@@ -7,7 +7,7 @@ from urllib.parse import unquote
 from app import metrics
 from app.elastic import search_with_elastic
 from app.semantic import SemanticSearch
-from app.sql import execute_query, pg_search
+from app.sql import PgSearchConfig, execute_query, pg_search
 
 
 DEFAULT_VIEW_WEIGHT = 1.0
@@ -199,7 +199,7 @@ def get_retrieved_df(
         query_list: list[str],
         search_type: Literal["pg_search", "semantic search", "elasticsearch"] = "pg_search",
         level: Literal["name", "number"] = "name",
-        pg_search_weights: dict[str, str] = None,
+        pg_search_config: PgSearchConfig = None,
         semantic_search: SemanticSearch = None,
         es_weights: dict[str, float] = None,
 ) -> pl.DataFrame:
@@ -218,8 +218,6 @@ def get_retrieved_df(
         List of search terms
     level
         Level at which to collect relevant items (name or item number)
-    pg_search_weights
-        Weights for the pg_search queries
     """
     if search_type == "semantic search" and semantic_search is None:
         raise ValueError("Must provide `semantic_search` if `search_type` is 'semantic'")
@@ -229,7 +227,11 @@ def get_retrieved_df(
 
     for query in query_list:
         if search_type == "pg_search":
-            _df = pg_search(query, weights=pg_search_weights)
+            _df = pg_search(
+                search_term=query,
+                weights=pg_search_config.pg_search_weights,
+                tsearch_weight=pg_search_config.tsearch_weight,
+            )
         elif search_type == "semantic search":
             _df = semantic_search.search(query)
         elif search_type == "elasticsearch":
@@ -294,7 +296,7 @@ def run_metrics(
         k_list: list[int],
         level: Literal["name", "number"] = "name",
         search_type: Literal["pg_search", "semantic search", "elasticsearch"] = "pg_search",
-        pg_search_weights: dict[str, str] = None,
+        pg_search_config: PgSearchConfig = None,
         view_weight: float = DEFAULT_VIEW_WEIGHT,
         hold_weight: float = DEFAULT_HOLD_WEIGHT,
         alpha: float = DEFAULT_ALPHA,
@@ -317,7 +319,7 @@ def run_metrics(
         query_list=query_list,
         search_type=search_type,
         level=level,
-        pg_search_weights=pg_search_weights,
+        pg_search_config=pg_search_config,
         semantic_search=semantic_search,
         es_weights=es_weights,
     )

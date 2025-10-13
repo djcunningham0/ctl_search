@@ -9,7 +9,7 @@ import polars as pl
 from app.elastic import get_default_elasticsearch_weights
 from app.relevance import run_metrics, get_top_n_queries
 from app.semantic import SemanticSearch, DEFAULT_EMBEDDING_MODEL, SUGGESTED_MODELS
-from app.sql import get_default_pg_search_weights
+from app.sql import PgSearchConfig, get_default_pg_search_weights
 
 st.title("Search Metrics Comparison")
 
@@ -44,7 +44,7 @@ def add_methodology():
     st.session_state["methodologies"].append({
         "type": "pg_search",
         "params": {
-            "pg_search_weights": {},
+            "pg_search": PgSearchConfig(),
             "semantic_search": defaultdict(str),
             "es_weights": {},
         }
@@ -61,7 +61,7 @@ def _run_metrics(
         k_list: list[int],
         level: Literal["name", "number"],
         search_type: Literal["pg_search", "semantic search", "elasticsearch"],
-        pg_search_weights: dict[str, str],
+        pg_search_config: PgSearchConfig,
         semantic_search: SemanticSearch,
         es_weights: dict[str, float],
 ):
@@ -70,7 +70,7 @@ def _run_metrics(
         k_list=k_list,
         level=level,
         search_type=search_type,
-        pg_search_weights=pg_search_weights,
+        pg_search_config=pg_search_config,
         semantic_search=semantic_search,
         es_weights=es_weights,
     )
@@ -91,17 +91,29 @@ def configure_methodology(index: int, methodology: dict):
         params = methodology["params"]
 
         if search_type == "pg_search":
-            with st.expander("pg_search weights"):
+            with st.expander("pg_search config"):
                 # TODO: figure out reset button (not as easy as single methodology case
                 #  -- don't want to reset *all* methodologies)
                 cols = cycle(st.columns(4))
                 options = ["A", "B", "C", "D", None]
                 for k, v in get_default_pg_search_weights().items():
                     col = next(cols)
-                    default_val = params["pg_search_weights"].get(k, v)
+                    default_val = params["pg_search"].pg_search_weights.get(k, v)
                     default_idx = options.index(default_val)
                     w = col.selectbox(k, options, index=default_idx, key=f"{k}_{index}")
-                    params["pg_search_weights"][k] = w
+                    params["pg_search"].pg_search_weights[k] = w
+
+                default_tsearch_weight = params["pg_search"].tsearch_weight
+                tsearch_weight = st.number_input(
+                    "tsearch weight",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(default_tsearch_weight),
+                    step=0.1,
+                    key=f"tsearch_weight_{index}",
+                    width=200,
+                )
+                params["pg_search"].tsearch_weight = tsearch_weight
 
         elif search_type == "semantic search":
             default_val = params["semantic_search"].get("model_name", DEFAULT_EMBEDDING_MODEL)
@@ -151,7 +163,7 @@ for i, methodology in enumerate(st.session_state["methodologies"]):
                 k_list=[1, 5, 10, 20, 50, 100],
                 level=level,
                 search_type=search_type,
-                pg_search_weights=params["pg_search_weights"],
+                pg_search_config=params["pg_search"],
                 semantic_search=params["semantic_search"]["model"],
                 es_weights=params["es_weights"],
             )
