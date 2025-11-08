@@ -20,14 +20,10 @@ with DEFAULT_ENGINE.begin() as conn:
 
 @dataclass
 class PgSearchConfig:
-    pg_search_weights: dict[str, Optional[str]] = (
-        None  # e.g. {"name": "A", "number": "A", ...}
-    )
+    pg_search_weights: dict[str, Optional[str]] = None  # e.g. {"name": "A", "number": "A", ...}  # fmt: skip
     tsearch_weight: float = 1.0
     use_cover_density: bool = False
-    normalization: int = (
-        0  # https://github.com/Casecommons/pg_search?tab=readme-ov-file#normalization
-    )
+    normalization: int = 0  # https://github.com/Casecommons/pg_search?tab=readme-ov-file#normalization  # fmt: skip
     prefix: bool = True
     trigram_threshold: float = 0.5
     trigram_sort_only: bool = True
