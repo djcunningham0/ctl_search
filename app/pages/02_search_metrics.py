@@ -7,11 +7,11 @@ import plotly.express as px
 import polars as pl
 
 from app.elastic import get_default_elasticsearch_weights
-from app.relevance import run_metrics, get_top_n_queries
+from app.relevance import EvaluationConfig, run_metrics, get_top_n_queries
 from app.semantic import SemanticSearch, DEFAULT_EMBEDDING_MODEL, SUGGESTED_MODELS
 from app.sql import PgSearchConfig, get_default_pg_search_weights
 
-st.title("Search Metrics Comparison")
+st.write("## Search Metrics Comparison")
 
 if "query_terms" not in st.session_state:
     st.session_state["query_terms"] = ", ".join(get_top_n_queries(20, exclude_camping=True))
@@ -31,7 +31,7 @@ with st.expander("preset query lists"):
 query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(",")
 query_terms = [x.strip() for x in query_terms if x.strip()]
 
-level = st.selectbox("level", ["name", "number"])
+level: Literal["name", "number"] = st.selectbox("level", ["name", "number"])
 
 if not query_terms:
     st.stop()
@@ -58,8 +58,7 @@ def remove_methodology(index: int):
 @st.cache_data(hash_funcs={SemanticSearch: lambda x: x.model_str})
 def _run_metrics(
         query_list: list[str],
-        k_list: list[int],
-        level: Literal["name", "number"],
+        eval_config: EvaluationConfig,
         search_type: Literal["pg_search", "semantic search", "elasticsearch"],
         pg_search_config: PgSearchConfig,
         semantic_search: SemanticSearch,
@@ -67,8 +66,7 @@ def _run_metrics(
 ):
     return run_metrics(
         query_list=query_list,
-        k_list=k_list,
-        level=level,
+        eval_config=eval_config,
         search_type=search_type,
         pg_search_config=pg_search_config,
         semantic_search=semantic_search,
@@ -91,6 +89,7 @@ def configure_methodology(index: int, methodology: dict):
         params = methodology["params"]
 
         if search_type == "pg_search":
+            pg_params: PgSearchConfig= params["pg_search"]
             with st.expander("pg_search config"):
                 # TODO: figure out reset button (not as easy as single methodology case
                 #  -- don't want to reset *all* methodologies)
@@ -98,22 +97,73 @@ def configure_methodology(index: int, methodology: dict):
                 options = ["A", "B", "C", "D", None]
                 for k, v in get_default_pg_search_weights().items():
                     col = next(cols)
-                    default_val = params["pg_search"].pg_search_weights.get(k, v)
+                    default_val = pg_params.pg_search_weights.get(k, v)
                     default_idx = options.index(default_val)
                     w = col.selectbox(k, options, index=default_idx, key=f"{k}_{index}")
-                    params["pg_search"].pg_search_weights[k] = w
+                    pg_params.pg_search_weights[k] = w
 
-                default_tsearch_weight = params["pg_search"].tsearch_weight
-                tsearch_weight = st.number_input(
-                    "tsearch weight",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=float(default_tsearch_weight),
-                    step=0.1,
-                    key=f"tsearch_weight_{index}",
-                    width=200,
-                )
-                params["pg_search"].tsearch_weight = tsearch_weight
+                with st.container(horizontal=True, vertical_alignment="bottom"):
+                    default_tsearch_weight = pg_params.tsearch_weight
+                    tsearch_weight = st.number_input(
+                        "tsearch weight",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(default_tsearch_weight),
+                        step=0.1,
+                        key=f"tsearch_weight_{index}",
+                        width=200,
+                    )
+                    pg_params.tsearch_weight = tsearch_weight
+
+                    default_normalization = pg_params.normalization
+                    normalization = st.number_input(
+                        "normalization",
+                        min_value=0,
+                        max_value=63,
+                        value=int(default_normalization),
+                        step=1,
+                        key=f"normalization_{index}",
+                        width=200,
+                    )
+                    pg_params.normalization = normalization
+
+                    with st.container():
+                        default_cover_density = pg_params.use_cover_density
+                        use_cover_density = st.checkbox(
+                            "use cover density",
+                            value=default_cover_density,
+                            key=f"use_cover_density_{index}",
+                        )
+                        pg_params.use_cover_density = use_cover_density
+
+                        default_prefix = pg_params.prefix
+                        use_prefix = st.checkbox(
+                            "use prefix search",
+                            value=default_prefix,
+                            key=f"use_prefix_{index}",
+                        )
+                        pg_params.prefix = use_prefix
+
+                with st.container(horizontal=True, vertical_alignment="bottom"):
+                    default_trigram_threshold = pg_params.trigram_threshold
+                    trigram_threshold = st.number_input(
+                        "trigram threshold",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=float(default_trigram_threshold),
+                        step=0.1,
+                        key=f"trigram_threshold_{index}",
+                        width=200,
+                    )
+                    pg_params.trigram_threshold = trigram_threshold
+
+                    default_trigram_sort_only = pg_params.trigram_sort_only
+                    trigram_sort_only = st.checkbox(
+                        "trigram sort only",
+                        value=default_trigram_sort_only,
+                        key=f"trigram_sort_only_{index}",
+                    )
+                    pg_params.trigram_sort_only = trigram_sort_only
 
         elif search_type == "semantic search":
             default_val = params["semantic_search"].get("model_name", DEFAULT_EMBEDDING_MODEL)
@@ -157,11 +207,14 @@ for i, methodology in enumerate(st.session_state["methodologies"]):
     params = methodology["params"]
 
     with st.spinner(f"executing methodology {i + 1}"):
+        eval_config = EvaluationConfig(
+            k_list=[1, 5, 10, 20, 50, 100],
+            level=level,
+        )
         metrics_df = (
             _run_metrics(
                 query_list=query_terms,
-                k_list=[1, 5, 10, 20, 50, 100],
-                level=level,
+                eval_config=eval_config,
                 search_type=search_type,
                 pg_search_config=params["pg_search"],
                 semantic_search=params["semantic_search"]["model"],

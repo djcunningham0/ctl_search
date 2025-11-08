@@ -38,9 +38,9 @@ def build_items_index(client: Elasticsearch):
     with st.spinner("building items index"):
         create_items_index(client, delete_if_exists=True)
         query = """
-            SELECT id, name, number, other_names, brand, plain_text_description, size, strength, status 
+            SELECT id, name, number, other_names, brand, plain_text_description, size, strength, status
             FROM items
-            WHERE status != 'retired'
+            WHERE status not in ('retired', 'missing', 'pending')
             ORDER BY number
         """
         df = execute_query(query).to_pandas()

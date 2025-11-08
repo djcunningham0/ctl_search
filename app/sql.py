@@ -1,9 +1,12 @@
+import logging
 import re
 from dataclasses import dataclass
 from typing import Optional, Union
 
 import polars as pl
 from sqlalchemy import Engine, TextClause, create_engine, text
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_ENGINE = create_engine("postgresql+psycopg2://Daniel@localhost:5432/circulate_development")
@@ -15,8 +18,13 @@ with DEFAULT_ENGINE.begin() as conn:
 
 @dataclass
 class PgSearchConfig:
-    pg_search_weights: dict[str, str] = None  # e.g. {"name": "A", "number": "A", ...}
+    pg_search_weights: dict[str, Optional[str]] = None  # e.g. {"name": "A", "number": "A", ...}
     tsearch_weight: float = 1.0
+    use_cover_density: bool = False
+    normalization: int = 0  # https://github.com/Casecommons/pg_search?tab=readme-ov-file#normalization
+    prefix: bool = True
+    trigram_threshold: float = 0.5
+    trigram_sort_only: bool = True
 
     def __post_init__(self):
         if self.pg_search_weights is None:
@@ -33,28 +41,38 @@ def execute_query(
 
 def pg_search(
         search_term: str,
-        weights: Optional[dict[str, str]] = None,
+        pg_search_config: PgSearchConfig = None,
         engine: Engine = DEFAULT_ENGINE,
-        tsearch_weight: float = 1.0,
 ) -> pl.DataFrame:
-    if weights is None:
-        weights = get_default_pg_search_weights()
+    if pg_search_config is None:
+        pg_search_config = PgSearchConfig()
 
+    weights = pg_search_config.pg_search_weights
     weights = {k: v for k, v in weights.items() if v is not None}
 
+    # TODO: it's possible to customize the relative weights of A, B, C, D
+    #  by passing an array of floats as the first argument to `ts_rank`,
+    #  e.g., `ts_rank(array[0.1, 0.2, 0.4, 1.0]::real[], ...)`
+    ts_rank_fn = "ts_rank_cd" if pg_search_config.use_cover_density else "ts_rank"
     ts_rank_str = " || ".join([f"setweight(to_tsvector('english', {k}::text), '{v}')" for k, v in weights.items()])
-    ts_rank_str = f"ts_rank({ts_rank_str}, to_tsquery('english', :search_term))"
+    ts_rank_str = f"{ts_rank_fn}({ts_rank_str}, to_tsquery('english', :search_term), {pg_search_config.normalization})"
     where_str = " || ".join([f"to_tsvector('english', {k}::text)" for k in weights.keys()])
     where_str = f"({where_str} @@ to_tsquery('english', :search_term))"
     sanitized_search_term = re.sub(r"[^a-zA-Z0-9\s]", "", search_term)
-    prefix_search_term = "&".join([f"{word}:*" for word in sanitized_search_term.split(" ")])
 
-    # Trigram similarity (pick fields to include)
-    trigram_expr = "greatest(" + ", ".join(
-        [f"similarity({k}::text, :search_term_raw)" for k in weights.keys()]
-    ) + ")"
+    if pg_search_config.prefix:
+        prefix_search_term = "&".join([f"{word}:*" for word in sanitized_search_term.split(" ")])
+    else:
+        prefix_search_term = "&".join([f"{word}" for word in sanitized_search_term.split(" ")])
 
-    trigram_weight = 1 - tsearch_weight
+    trigram_expr = "similarity(name, :search_term_raw)"
+    trigram_weight = 1 - pg_search_config.tsearch_weight
+
+    if pg_search_config.trigram_sort_only:
+        # do not include trigram score in `where` clause
+        pass
+    else:
+        where_str = f"({where_str} OR {trigram_expr} > {float(pg_search_config.trigram_threshold)})"
 
     query = text(f"""
         SELECT
@@ -69,23 +87,26 @@ def pg_search(
             strength,
             {ts_rank_str} AS tsearch_score,
             {trigram_expr} AS trigram_score,
-            {ts_rank_str} * {tsearch_weight} + {trigram_expr} * {trigram_weight} AS search_score
+            {ts_rank_str} * {pg_search_config.tsearch_weight} + {trigram_expr} * {trigram_weight} AS search_score
         FROM items
         WHERE
-            ({where_str} OR {trigram_expr} > 0.1)
-            AND status != 'retired'
+            {where_str}
+            AND status not in ('retired', 'missing', 'pending')
         ORDER BY
             search_score DESC,
             number;
     """)
     query = query.bindparams(search_term=prefix_search_term, search_term_raw=sanitized_search_term)
+
+    logger.debug("pg_search query: %s", query.compile(compile_kwargs={"literal_binds": True}))
+
     return (
         execute_query(query, engine)
         .with_columns(pl.col("search_score").rank(descending=True, method="ordinal").alias("search_rank"))
     )
 
 
-def get_default_pg_search_weights() -> dict[str, str]:
+def get_default_pg_search_weights() -> dict[str, Optional[str]]:
     return {
         "name": "A",
         "number": "A",

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Literal
 
 import polars as pl
@@ -227,11 +228,7 @@ def get_retrieved_df(
 
     for query in query_list:
         if search_type == "pg_search":
-            _df = pg_search(
-                search_term=query,
-                weights=pg_search_config.pg_search_weights,
-                tsearch_weight=pg_search_config.tsearch_weight,
-            )
+            _df = pg_search(search_term=query, pg_search_config=pg_search_config)
         elif search_type == "semantic search":
             _df = semantic_search.search(query)
         elif search_type == "elasticsearch":
@@ -291,34 +288,44 @@ def calculate_ndcg(
     return metrics_df
 
 
+@dataclass
+class EvaluationConfig:
+    # NDCG parameters
+    k_list: list[int]
+    dcg_type: Literal["linear", "exponential"] = "linear"
+    drop_lists: bool = True
+
+    # grouping level for relevant/retrieved items
+    level: Literal["name", "number"] = "name"
+
+    # relevance calculation parameters
+    view_weight: float = DEFAULT_VIEW_WEIGHT
+    hold_weight: float = DEFAULT_HOLD_WEIGHT
+    alpha: float = DEFAULT_ALPHA
+    max_i: int = DEFAULT_MAX_I
+
+
 def run_metrics(
         query_list: list[str],
-        k_list: list[int],
-        level: Literal["name", "number"] = "name",
+        eval_config: EvaluationConfig,
         search_type: Literal["pg_search", "semantic search", "elasticsearch"] = "pg_search",
         pg_search_config: PgSearchConfig = None,
-        view_weight: float = DEFAULT_VIEW_WEIGHT,
-        hold_weight: float = DEFAULT_HOLD_WEIGHT,
-        alpha: float = DEFAULT_ALPHA,
-        max_i: int = DEFAULT_MAX_I,
-        dcg_type: Literal["linear", "exponential"] = "linear",
-        drop_lists: bool = True,
         semantic_search: SemanticSearch = None,
         es_weights: dict[str, float] = None,
 ) -> pl.DataFrame:
     query_df = load_query_df()
     relevance_df = calculate_relevance_df(
         query_df=query_df,
-        view_weight=view_weight,
-        hold_weight=hold_weight,
-        alpha=alpha,
-        max_i=max_i,
+        view_weight=eval_config.view_weight,
+        hold_weight=eval_config.hold_weight,
+        alpha=eval_config.alpha,
+        max_i=eval_config.max_i,
     )
-    collected_relevance = collect_relevance_df(relevance_df, level=level)
+    collected_relevance = collect_relevance_df(relevance_df, level=eval_config.level)
     retrieved_df = get_retrieved_df(
         query_list=query_list,
         search_type=search_type,
-        level=level,
+        level=eval_config.level,
         pg_search_config=pg_search_config,
         semantic_search=semantic_search,
         es_weights=es_weights,
@@ -329,7 +336,7 @@ def run_metrics(
     )
     return calculate_ndcg(
         combined_df=combined_df,
-        k_list=k_list,
-        dcg_type=dcg_type,
-        drop_lists=drop_lists,
+        k_list=eval_config.k_list,
+        dcg_type=eval_config.dcg_type,
+        drop_lists=eval_config.drop_lists,
     )

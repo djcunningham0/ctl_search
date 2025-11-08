@@ -62,13 +62,18 @@ class SemanticSearch:
         )
 
 def load_items_df() -> pl.DataFrame:
-    return execute_query("select * from items where status != 'retired'").rename({"name": "item_name"})
+    query = """
+        select *
+        from items
+        where status not in ('retired', 'missing', 'pending')
+    """
+    return execute_query(query).rename({"name": "item_name"})
 
 
 def item_df_to_corpus(item_df: pl.DataFrame) -> list[str]:
     return (
         item_df
-        .filter(pl.col("status") != "retired")
+        .filter(~pl.col("status").is_in(["retired", "missing", "pending"]))
         .select(pl.format(
             "ID: {}"
             "\n\nname: {}"
