@@ -7,7 +7,6 @@ from torch import Tensor
 
 from app.sql import execute_query
 
-
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 # https://sbert.net/docs/sentence_transformer/pretrained_models.html#semantic-search-models
@@ -18,7 +17,6 @@ SUGGESTED_MODELS = [
     "all-mpnet-base-v2",  # surprisingly seems worse than all-MiniLM-L6-v2
     "multi-qa-distilbert-cos-v1",
     "multi-qa-MiniLM-L6-cos-v1",
-
     # MSMARCO models are designed to work better for asymmetric search, where queries are shorter than documents
     # https://sbert.net/docs/pretrained-models/msmarco-v5.html
     "msmarco-MiniLM-L6-cos-v5",  # cosine
@@ -27,7 +25,6 @@ SUGGESTED_MODELS = [
     "msmarco-distilbert-base-tas-b",  # dot
     "msmarco-distilbert-dot-v5",  # dot
     "msmarco-bert-base-dot-v5",  # dot
-
     # I considered the ones below this line but they performed worse than the others
     # "all-distilroberta-v1",
     # "all-MiniLM-L12-v2",
@@ -50,16 +47,22 @@ class SemanticSearch:
 
     def search(self, query: str, n: Optional[int] = None) -> pl.DataFrame:
         query_embedding = self.encode_query(query)
-        cos_scores: Tensor = self.embedder.similarity(query_embedding, self.embedded_corpus)[0]
+        cos_scores: Tensor = self.embedder.similarity(
+            query_embedding, self.embedded_corpus
+        )[0]
         n = n or len(self.corpus)
         return (
-            self.df
-            .with_columns(pl.lit(query).alias("query"))
+            self.df.with_columns(pl.lit(query).alias("query"))
             .with_columns(pl.Series("search_score", cos_scores.tolist()))
-            .with_columns(pl.col("search_score").rank(descending=True, method="ordinal").alias("search_rank"))
+            .with_columns(
+                pl.col("search_score")
+                .rank(descending=True, method="ordinal")
+                .alias("search_rank")
+            )
             .sort("search_rank")
             .head(n)
         )
+
 
 def load_items_df() -> pl.DataFrame:
     query = """
@@ -72,24 +75,25 @@ def load_items_df() -> pl.DataFrame:
 
 def item_df_to_corpus(item_df: pl.DataFrame) -> list[str]:
     return (
-        item_df
-        .filter(~pl.col("status").is_in(["retired", "missing", "pending"]))
-        .select(pl.format(
-            "ID: {}"
-            "\n\nname: {}"
-            "\n\nother names: {}"
-            "\n\nbrand: {}"
-            "\n\ndescription: {}"
-            "\n\nsize: {}"
-            "\n\nstrength: {}",
-            pl.col("number"),
-            pl.col("item_name"),
-            pl.col("other_names"),
-            pl.col("brand"),
-            pl.col("plain_text_description"),
-            pl.col("size"),
-            pl.col("strength"),
-        ))
+        item_df.filter(~pl.col("status").is_in(["retired", "missing", "pending"]))
+        .select(
+            pl.format(
+                "ID: {}"
+                "\n\nname: {}"
+                "\n\nother names: {}"
+                "\n\nbrand: {}"
+                "\n\ndescription: {}"
+                "\n\nsize: {}"
+                "\n\nstrength: {}",
+                pl.col("number"),
+                pl.col("item_name"),
+                pl.col("other_names"),
+                pl.col("brand"),
+                pl.col("plain_text_description"),
+                pl.col("size"),
+                pl.col("strength"),
+            )
+        )
         .to_series()
         .to_list()
     )

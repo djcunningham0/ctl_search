@@ -53,16 +53,16 @@ def build_items_index(client: Elasticsearch):
                 "brand": row["brand"],
                 "plain_text_description": row["plain_text_description"],
                 "size": row["size"],
-                "strength": row["strength"]
+                "strength": row["strength"],
             }
             client.index(index="items", document=doc)
 
 
 def search_with_elastic(
-        search_term: str,
-        client: Elasticsearch = None,
-        weights: dict[str, int] = None,
-        **kwargs,
+    search_term: str,
+    client: Elasticsearch = None,
+    weights: dict[str, int] = None,
+    **kwargs,
 ) -> pl.DataFrame:
     if client is None:
         client = get_es_client()
@@ -94,8 +94,7 @@ def search_with_elastic(
 
     items_df = execute_query("select * from items")
     return (
-        results_df
-        .join(items_df, on=["id"], how="inner")
+        results_df.join(items_df, on=["id"], how="inner")
         .rename({"name": "item_name"})
         .sort("search_rank")
     )

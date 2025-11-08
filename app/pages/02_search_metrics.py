@@ -14,21 +14,29 @@ from app.sql import PgSearchConfig, get_default_pg_search_weights
 st.write("## Search Metrics Comparison")
 
 if "query_terms" not in st.session_state:
-    st.session_state["query_terms"] = ", ".join(get_top_n_queries(20, exclude_camping=True))
+    st.session_state["query_terms"] = ", ".join(
+        get_top_n_queries(20, exclude_camping=True)
+    )
 
 
 def update_query_terms(n: int, exclude_camping: bool):
-    st.session_state["query_terms"] = ", ".join(get_top_n_queries(n, exclude_camping=exclude_camping))
+    st.session_state["query_terms"] = ", ".join(
+        get_top_n_queries(n, exclude_camping=exclude_camping)
+    )
 
 
 with st.expander("preset query lists"):
     exclude_camping = st.checkbox("exclude camping", value=True)
     cols = cycle(st.columns(4))
     for n in [5, 10, 20, 40, 60, 80, 100, 200]:
-        next(cols).button(f"top {n} queries", on_click=update_query_terms, args=(n, exclude_camping))
+        next(cols).button(
+            f"top {n} queries", on_click=update_query_terms, args=(n, exclude_camping)
+        )
 
 # collect query terms
-query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(",")
+query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(
+    ","
+)
 query_terms = [x.strip() for x in query_terms if x.strip()]
 
 level: Literal["name", "number"] = st.selectbox("level", ["name", "number"])
@@ -47,7 +55,7 @@ def add_methodology():
             "pg_search": PgSearchConfig(),
             "semantic_search": defaultdict(str),
             "es_weights": {},
-        }
+        },
     })
 
 
@@ -57,12 +65,12 @@ def remove_methodology(index: int):
 
 @st.cache_data(hash_funcs={SemanticSearch: lambda x: x.model_str})
 def _run_metrics(
-        query_list: list[str],
-        eval_config: EvaluationConfig,
-        search_type: Literal["pg_search", "semantic search", "elasticsearch"],
-        pg_search_config: PgSearchConfig,
-        semantic_search: SemanticSearch,
-        es_weights: dict[str, float],
+    query_list: list[str],
+    eval_config: EvaluationConfig,
+    search_type: Literal["pg_search", "semantic search", "elasticsearch"],
+    pg_search_config: PgSearchConfig,
+    semantic_search: SemanticSearch,
+    es_weights: dict[str, float],
 ):
     return run_metrics(
         query_list=query_list,
@@ -82,14 +90,16 @@ def configure_methodology(index: int, methodology: dict):
             "search type",
             options=["pg_search", "semantic search", "elasticsearch"],
             key=f"search_type_{index}",
-            index=["pg_search", "semantic search", "elasticsearch"].index(methodology["type"])
+            index=["pg_search", "semantic search", "elasticsearch"].index(
+                methodology["type"]
+            ),
         )
         methodology["type"] = search_type
 
         params = methodology["params"]
 
         if search_type == "pg_search":
-            pg_params: PgSearchConfig= params["pg_search"]
+            pg_params: PgSearchConfig = params["pg_search"]
             with st.expander("pg_search config"):
                 # TODO: figure out reset button (not as easy as single methodology case
                 #  -- don't want to reset *all* methodologies)
@@ -166,13 +176,15 @@ def configure_methodology(index: int, methodology: dict):
                     pg_params.trigram_sort_only = trigram_sort_only
 
         elif search_type == "semantic search":
-            default_val = params["semantic_search"].get("model_name", DEFAULT_EMBEDDING_MODEL)
+            default_val = params["semantic_search"].get(
+                "model_name", DEFAULT_EMBEDDING_MODEL
+            )
             default_idx = SUGGESTED_MODELS.index(default_val)
             semantic_search_model = st.selectbox(
                 "semantic search model",
                 options=SUGGESTED_MODELS,
                 index=default_idx,
-                key=f"semantic_model_{index}"
+                key=f"semantic_model_{index}",
             )
             params["semantic_search"]["model_name"] = semantic_search_model
             params["semantic_search"]["model"] = SemanticSearch(semantic_search_model)
@@ -184,7 +196,13 @@ def configure_methodology(index: int, methodology: dict):
                 for k, v in get_default_elasticsearch_weights().items():
                     col = next(cols)
                     default_val = params["es_weights"].get(k, v)
-                    w = col.number_input(k, value=float(default_val), min_value=0.0, step=1.0, key=f"{k}_elastic_{index}")
+                    w = col.number_input(
+                        k,
+                        value=float(default_val),
+                        min_value=0.0,
+                        step=1.0,
+                        key=f"{k}_elastic_{index}",
+                    )
                     params["es_weights"][k] = w
 
         methodology["params"] = params
@@ -225,9 +243,7 @@ for i, methodology in enumerate(st.session_state["methodologies"]):
                 pl.lit(search_type).alias("base_methodology"),
                 pl.lit(f"{search_type} ({i + 1})").alias("name"),
             )
-            .with_columns(
-                pl.col("query").cast(pl.Enum(query_terms))
-            )
+            .with_columns(pl.col("query").cast(pl.Enum(query_terms)))
         )
         results.append(metrics_df)
 
@@ -244,8 +260,7 @@ if results:
 
     st.write("### Overall metrics")
     agg_df = (
-        final_df
-        .drop("query")
+        final_df.drop("query")
         .group_by(["n", "name", "base_methodology"])
         .mean()
         .sort("n")

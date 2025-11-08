@@ -5,9 +5,13 @@ import streamlit as st
 from elastic_transport import ConnectionError
 
 from app.elastic import search_with_elastic, get_default_elasticsearch_weights
-from app.semantic import SemanticSearch, item_df_to_corpus, DEFAULT_EMBEDDING_MODEL, SUGGESTED_MODELS
+from app.semantic import (
+    SemanticSearch,
+    item_df_to_corpus,
+    DEFAULT_EMBEDDING_MODEL,
+    SUGGESTED_MODELS,
+)
 from app.sql import PgSearchConfig, pg_search, get_default_pg_search_weights
-
 
 if "page_1_i" not in st.session_state:
     st.session_state["page_1_i"] = 0
@@ -16,7 +20,10 @@ if "page_1_i" not in st.session_state:
 def display_df(df: pl.DataFrame):
     for _, row in df.to_pandas().iterrows():
         st.write("---")
-        st.write(f"Number: [{row['number']}](https://app.chicagotoollibrary.org/items/{row['id']})")
+        st.write(
+            "Number:"
+            f" [{row['number']}](https://app.chicagotoollibrary.org/items/{row['id']})"
+        )
         st.write(f"name: {row['item_name']}")
         # st.write(f"other names: {row['other_names']}")
         # st.write(f"brand: {row['brand']}")
@@ -47,7 +54,12 @@ with st.sidebar:
         pg_search_weights = {}
         for k, v in get_default_pg_search_weights().items():
             col = next(cols)
-            w = col.selectbox(k, options, index=options.index(v), key=f"{k}_{st.session_state['page_1_i']}")
+            w = col.selectbox(
+                k,
+                options,
+                index=options.index(v),
+                key=f"{k}_{st.session_state['page_1_i']}",
+            )
             if w is not None:
                 pg_search_weights[k] = w
 
@@ -122,8 +134,13 @@ with st.sidebar:
     es_weights = {}
     for k, v in get_default_elasticsearch_weights().items():
         col = next(cols)
-        w = col.number_input(k, value=float(v), min_value=0.0, step=1.0,
-                             key=f"{k}_elastic_{st.session_state['page_1_i']}")
+        w = col.number_input(
+            k,
+            value=float(v),
+            min_value=0.0,
+            step=1.0,
+            key=f"{k}_elastic_{st.session_state['page_1_i']}",
+        )
         if w is not None:
             es_weights[k] = w
 
@@ -171,4 +188,3 @@ if query != "":
             display_df(results)
         except ConnectionError as e:
             st.info("Elasticsearch server is not running.")
-

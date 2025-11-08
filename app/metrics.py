@@ -4,9 +4,9 @@ import numpy as np
 
 
 def precision_at_k(
-        retrieved: list,
-        relevant: set | dict,
-        k: int,
+    retrieved: list,
+    relevant: set | dict,
+    k: int,
 ) -> float:
     if len(retrieved) == 0:
         return 0.0
@@ -15,9 +15,9 @@ def precision_at_k(
 
 
 def recall_at_k(
-        retrieved: list,
-        relevant: set | dict,
-        k: int,
+    retrieved: list,
+    relevant: set | dict,
+    k: int,
 ) -> float:
     if len(relevant) == 0:
         return 0.0
@@ -26,10 +26,10 @@ def recall_at_k(
 
 
 def dcg_at_k(
-        retrieved: list,
-        relevant: set | dict,  # {item: relevance_score}
-        k: int,
-        dcg_type: Literal["linear", "exponential"] = "linear",
+    retrieved: list,
+    relevant: set | dict,  # {item: relevance_score}
+    k: int,
+    dcg_type: Literal["linear", "exponential"] = "linear",
 ) -> float:
     if len(retrieved) == 0:
         return 0.0
@@ -42,14 +42,17 @@ def dcg_at_k(
         return sum(relevant.get(x, 0) / np.log2(i + 2) for i, x in enumerate(retrieved))
     else:
         # exponential discounting: (2^rel_i - 1) / log2(i+2)
-        return sum((2 ** relevant.get(x, 0) - 1) / np.log2(i + 2) for i, x in enumerate(retrieved))
+        return sum(
+            (2 ** relevant.get(x, 0) - 1) / np.log2(i + 2)
+            for i, x in enumerate(retrieved)
+        )
 
 
 def ndcg_at_k(
-        retrieved: list,
-        relevant: set | dict,  # {item: relevance_score}
-        k: int,
-        dcg_type: Literal["linear", "exponential"] = "linear",
+    retrieved: list,
+    relevant: set | dict,  # {item: relevance_score}
+    k: int,
+    dcg_type: Literal["linear", "exponential"] = "linear",
 ) -> float:
     relevant = _validate_relevant_dict(relevant)
     dcg = dcg_at_k(retrieved, relevant, k, dcg_type)
