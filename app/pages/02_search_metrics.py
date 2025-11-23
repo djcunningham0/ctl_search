@@ -7,7 +7,15 @@ import plotly.express as px
 import polars as pl
 
 from app.elastic import get_default_elasticsearch_weights
-from app.relevance import EvaluationConfig, run_metrics, get_top_n_queries
+from app.relevance import (
+    DEFAULT_ALPHA,
+    DEFAULT_HOLD_WEIGHT,
+    DEFAULT_MAX_I,
+    DEFAULT_VIEW_WEIGHT,
+    EvaluationConfig,
+    run_metrics,
+    get_top_n_queries,
+)
 from app.semantic import SemanticSearch, DEFAULT_EMBEDDING_MODEL, SUGGESTED_MODELS
 from app.sql import PgSearchConfig, get_default_pg_search_weights
 
@@ -27,19 +35,74 @@ def update_query_terms(n: int, exclude_camping: bool):
 
 with st.expander("preset query lists"):
     exclude_camping = st.checkbox("exclude camping", value=True)
-    cols = cycle(st.columns(4))
-    for n in [5, 10, 20, 40, 60, 80, 100, 200]:
-        next(cols).button(
-            f"top {n} queries", on_click=update_query_terms, args=(n, exclude_camping)
+    with st.container(horizontal=True):
+        for n in [5, 10, 20, 40, 50, 60, 80, 100, 200]:
+            st.button(
+                f"top {n} queries",
+                width=135,
+                on_click=update_query_terms,
+                args=(n, exclude_camping),
+            )
+
+with st.sidebar:
+    with st.expander("relevance settings"):
+        if "relevance_settings_i" not in st.session_state:
+            st.session_state["relevance_settings_i"] = 0
+
+        relevance_i = st.session_state["relevance_settings_i"]
+        placeholder = st.empty()
+
+        view_weight = st.number_input(
+            "view weight",
+            min_value=0.0,
+            value=DEFAULT_VIEW_WEIGHT,
+            step=0.5,
+            key=f"view_weight_{relevance_i}",
+        )
+        hold_weight = st.number_input(
+            "hold weight",
+            min_value=0.0,
+            value=DEFAULT_HOLD_WEIGHT,
+            step=0.5,
+            key=f"hold_weight_{relevance_i}",
+        )
+        alpha = st.number_input(
+            "alpha",
+            min_value=0.0,
+            max_value=1.0,
+            value=DEFAULT_ALPHA,
+            step=0.05,
+            key=f"alpha_{relevance_i}",
+        )
+        max_i = st.number_input(
+            "max_i",
+            min_value=1,
+            value=DEFAULT_MAX_I,
+            step=1,
+            key=f"max_i_{relevance_i}",
+        )
+        dcg_type: Literal["linear", "exponential"] = st.selectbox(
+            "dcg type",
+            options=["linear", "exponential"],
+            index=0,
+            key=f"dcg_type_{relevance_i}",
+        )
+        level: Literal["name", "number"] = st.selectbox(
+            "level",
+            ["name", "number"],
+            index=0,
+            key=f"level_{relevance_i}",
         )
 
-# collect query terms
-query_terms = st.text_input("query terms", value=st.session_state["query_terms"]).split(
-    ","
-)
-query_terms = [x.strip() for x in query_terms if x.strip()]
+        if placeholder.button("reset"):
+            st.session_state["relevance_settings_i"] += 1
+            st.rerun()
 
-level: Literal["name", "number"] = st.selectbox("level", ["name", "number"])
+# collect query terms
+query_terms = st.text_input("query terms", value=st.session_state["query_terms"])
+query_terms = query_terms.split(",")
+query_terms = [x.strip() for x in query_terms if x.strip()]
+st.caption(f"{len(query_terms)} query terms")
 
 if not query_terms:
     st.stop()
@@ -228,6 +291,11 @@ for i, methodology in enumerate(st.session_state["methodologies"]):
         eval_config = EvaluationConfig(
             k_list=[1, 5, 10, 20, 50, 100],
             level=level,
+            dcg_type=dcg_type,
+            view_weight=view_weight,
+            hold_weight=hold_weight,
+            alpha=alpha,
+            max_i=max_i,
         )
         metrics_df = (
             _run_metrics(

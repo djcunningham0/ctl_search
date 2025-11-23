@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import Literal
 
@@ -9,6 +10,8 @@ from app import metrics
 from app.elastic import search_with_elastic
 from app.semantic import SemanticSearch
 from app.sql import PgSearchConfig, execute_query, pg_search
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_VIEW_WEIGHT = 1.0
 DEFAULT_HOLD_WEIGHT = 2.0
@@ -318,7 +321,10 @@ def run_metrics(
     semantic_search: SemanticSearch = None,
     es_weights: dict[str, float] = None,
 ) -> pl.DataFrame:
+    logger.debug("loading query df...")
     query_df = load_query_df()
+
+    logger.debug("calculating relevance df...")
     relevance_df = calculate_relevance_df(
         query_df=query_df,
         view_weight=eval_config.view_weight,
@@ -326,7 +332,11 @@ def run_metrics(
         alpha=eval_config.alpha,
         max_i=eval_config.max_i,
     )
+
+    logger.debug("collecting relevance df...")
     collected_relevance = collect_relevance_df(relevance_df, level=eval_config.level)
+
+    logger.debug("getting retrieved df...")
     retrieved_df = get_retrieved_df(
         query_list=query_list,
         search_type=search_type,
@@ -335,10 +345,14 @@ def run_metrics(
         semantic_search=semantic_search,
         es_weights=es_weights,
     )
+
+    logger.debug("combining retrieved and relevant dfs...")
     combined_df = combine_retrieved_and_relevant_dfs(
         retrieved_df=retrieved_df,
         relevant_df=collected_relevance,
     )
+
+    logger.debug("calculating ndcg...")
     return calculate_ndcg(
         combined_df=combined_df,
         k_list=eval_config.k_list,
