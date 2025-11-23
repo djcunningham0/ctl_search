@@ -1,4 +1,6 @@
 elasticsearch
+optuna
+optuna-dashboard
 plotly
 polars
 psycopg2
